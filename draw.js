@@ -1,3 +1,0 @@
-export function draw(screen) {
-    
-}

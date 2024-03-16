@@ -24,7 +24,7 @@ export const chip8 = {
         chip8.keys = new Array(16).fill(0x0);
         // Load chip8's fontset into memory
         for (let i = 0; i < 0x50; i++) {
-            memory[i] = chip8_fontset[i];
+            chip8.memory[i] = chip8_fontset[i];
         }
 
         // Reset timers:
@@ -32,26 +32,31 @@ export const chip8 = {
         chip8.soundTimer = 60;
     },
     loadProgram: (buffer) => {
-        for (let i = 0; i < buffer.size; i++) {
+        for (let i = 0; i < buffer.length; i++) {
             chip8.memory[i + 0x200] = buffer[i];
         }
     },
     emulateCycle: () => {
 
         // Chip8 stores 1 OPcode in 2 memory locations next to each other (eg pc, pc+1)
-        chip8.opcode = chip8.memory[chip8.pc] << 8 | chip8.memory[chip8.pc + 1];
+        chip8.opcode = (chip8.memory[chip8.pc] << 8) | chip8.memory[chip8.pc + 1];
+        console.log(`Executing 0x${chip8.opcode.toString(16).toUpperCase()}`);
         switch (chip8.opcode & 0xF000) {
             case 0x0000:
                 switch (chip8.opcode) {
                     case 0x00E0:
                         chip8.screen = new Array(32).fill(Array(64).fill(0));
-                        chip8.pc += 2;
+                        chip8.drawFlag = true;
+                        break;
                     case 0x00EE:
                         chip8.pc = chip8.stack[chip8.stackPointer - 1];
                         chip8.stackPointer--;
+                        break;
                     default:
-                        console.log("invalid opcode");
+                        console.log("invalid opcode")
+                        break;
                 }
+                chip8.pc += 2;
                 break;
             case 0x1000:
                 chip8.pc = chip8.opcode & 0x0FFF;
@@ -62,111 +67,117 @@ export const chip8 = {
                 chip8.pc = chip8.opcode & 0x0FFF;
                 break;
             case 0x3000:
-                if (chip8.register[chip8.opcode & 0x0F00 >> 8] == chip8.opcode & 0x00FF) {
+                if (chip8.register[(chip8.opcode & 0x0F00) >> 8] == chip8.opcode & 0x00FF) {
                     chip8.pc += 4;
                 }
+                else chip8.pc += 2;
                 break;
             case 0x4000:
-                if (chip8.register[chip8.opcode & 0x0F00 >> 8] != chip8.opcode & 0x00FF) {
+                if (chip8.register[(chip8.opcode & 0x0F00) >> 8] != chip8.opcode & 0x00FF) {
                     chip8.pc += 4;
                 }
+                else chip8.pc += 2;
                 break;
             case 0x5000:
-                if (chip8.register[chip8.opcode & 0x0F00 >> 8] == chip8.register[chip8.opcode & 0x000F]) {
+                if (chip8.register[(chip8.opcode & 0x0F00) >> 8] == chip8.register[chip8.opcode & 0x000F]) {
                     chip8.pc += 4;
                 }
+                else chip8.pc += 2;
                 break;
             case 0x6000:
-                chip8.register[chip8.opcode & 0x0F00 >> 8] = chip8.opcode & 0x00FF;
+                chip8.register[(chip8.opcode & 0x0F00) >> 8] = chip8.opcode & 0x00FF;
                 chip8.pc += 2;
                 break;
             case 0x7000:
-                chip8.register[chip8.opcode & 0x0F00 >> 8] += chip8.opcode & 0x00FF;
+                chip8.register[(chip8.opcode & 0x0F00) >> 8] += chip8.opcode & 0x00FF;
                 chip8.pc += 2;
                 break;
             case 0x8000:
                 switch (chip8.opcode & 0x000F) {
                     case 0:
-                        chip8.register[chip8.opcode & 0x0F00 >> 8] = chip8.register[chip8.opcode & 0x00F0 >> 4];
+                        chip8.register[(chip8.opcode & 0x0F00) >> 8] = chip8.register[(chip8.opcode & 0x00F0) >> 4];
                         break;
                     case 1:
-                        chip8.register[chip8.opcode & 0x0F00 >> 8] |= chip8.register[chip8.opcode & 0x00F0 >> 4];
+                        chip8.register[(chip8.opcode & 0x0F00) >> 8] |= chip8.register[(chip8.opcode & 0x00F0) >> 4];
                         break;
                     case 2:
-                        chip8.register[chip8.opcode & 0x0F00 >> 8] &= chip8.register[chip8.opcode & 0x00F0 >> 4];
+                        chip8.register[(chip8.opcode & 0x0F00) >> 8] &= chip8.register[(chip8.opcode & 0x00F0) >> 4];
                         break;
                     case 3:
-                        chip8.register[chip8.opcode & 0x0F00 >> 8] ^= chip8.register[chip8.opcode & 0x00F0 >> 4];
+                        chip8.register[(chip8.opcode & 0x0F00) >> 8] ^= chip8.register[(chip8.opcode & 0x00F0) >> 4];
                         break;
                     case 4:
-                        if (chip8.register[chip8.opcode & 0x00F0 >> 4] + chip8.register[chip8.opcode & 0x0F00 >> 8] > 0xFF) {
+                        if (chip8.register[(chip8.opcode & 0x00F0) >> 4] > (0xFF - chip8.register[(chip8.opcode & 0x0F00) >> 8])) {
                             chip8.register[0xF] = 1;
                         }
                         else {
                             chip8.register[0xF] = 0;
                         }
-                        chip8.register[chip8.opcode & 0x0F00 >> 8] += chip8.register[chip8.opcode & 0x00F0 >> 4];
+                        chip8.register[(chip8.opcode & 0x0F00) >> 8] += chip8.register[(chip8.opcode & 0x00F0) >> 4];
                         break;
                     case 5:
-                        if (chip8.register[chip8.opcode & 0x0F00 >> 8] - chip8.register[chip8.opcode & 0x00F0 >> 4] < 0x00) {
+                        if (chip8.register[(chip8.opcode & 0x0F00) >> 8] < chip8.register[(chip8.opcode & 0x00F0) >> 4]) {
                             chip8.register[0xF] = 0;
                         }
                         else {
                             chip8.register[0xF] = 1;
                         }
-                        chip8.register[chip8.opcode & 0x0F00 >> 8] -= chip8.register[chip8.opcode & 0x00F0 >> 4];
+                        chip8.register[(chip8.opcode & 0x0F00) >> 8] -= chip8.register[(chip8.opcode & 0x00F0) >> 4];
                         break;
                     case 6:
-                        chip8.register[0xF] = chip8.register[chip8.opcode & 0x0F00 >> 8] & 0b0001;
-                        chip8.register[chip8.opcode & 0x0F00 >> 8] = chip8.register[chip8.opcode & 0x0F00 >> 8] >>> 1;
+                        chip8.register[0xF] = chip8.register[(chip8.opcode & 0x0F00) >> 8] & 0b0001;
+                        chip8.register[(chip8.opcode & 0x0F00) >> 8] = chip8.register[(chip8.opcode & 0x0F00) >> 8] >> 1;
                         break;
                     case 7:
-                        if (chip8.register[chip8.opcode & 0x00F0 >> 4] - chip8.register[chip8.opcode & 0x0F00 >> 8] < 0x00) {
+                        if (chip8.register[(chip8.opcode & 0x00F0) >> 4] - chip8.register[(chip8.opcode & 0x0F00) >> 8] < 0x00) {
                             chip8.register[0xF] = 0;
                         }
                         else {
                             chip8.register[0xF] = 1;
                         }
-                        chip8.register[chip8.opcode & 0x0F00 >> 8] = chip8.register[chip8.opcode & 0x00F0 >> 4] - chip8.register[chip8.opcode & 0x0F00 >> 8];
+                        chip8.register[(chip8.opcode & 0x0F00) >> 8] = chip8.register[(chip8.opcode & 0x00F0) >> 4] - chip8.register[(chip8.opcode & 0x0F00) >> 8];
                         break;
                     case 0xE:
-                        chip8.register[0xF] = chip8.register[chip8.opcode & 0x0F00 >> 8] & 0b1000;
-                        chip8.register[chip8.opcode & 0x0F00 >> 8] = chip8.register[chip8.opcode & 0x0F00 >> 8] << 1;
-                        chip8.register[chip8.opcode & 0x0F00 >> 8] = chip8.register[chip8.opcode & 0x0F00 >> 8] & 0xFFFF;
+                        chip8.register[0xF] = chip8.register[(chip8.opcode & 0x0F00) >> 8] >> 7;
+                        chip8.register[(chip8.opcode & 0x0F00) >> 8] <<= 1;
+                        chip8.register[(chip8.opcode & 0x0F00) >> 8] = chip8.register[(chip8.opcode & 0x0F00) >> 8] & 0xFFFF;
                         break;
                     default:
                         console.log('Invalid opcode');
+                        break;
                 }
                 chip8.pc += 2;
                 break;
             case 0x9000:
-                if (chip8.register[chip8.opcode & 0x0F00 >> 8] != chip8.register[chip8.opcode & 0x00F0 >> 4]) {
+                if (chip8.register[(chip8.opcode & 0x0F00) >> 8] != chip8.register[(chip8.opcode & 0x00F0) >> 4]) {
                     chip8.pc += 4;
                 }
                 else chip8.pc += 2;
                 break;
             case 0xA000:
-                chip8.Iregister = chip8.opcode & 0x0FFF;
+                chip8.Iregister = (chip8.opcode & 0x0FFF);
                 chip8.pc += 2;
                 break;
             case 0xB000:
                 chip8.pc = chip8.register[0x0] + (chip8.opcode & 0x0FFF);
                 break;
             case 0xC000:
-                chip8.register[chip8.opcode & 0x0F00 >> 8] = generateRandomInteger(0x0, 0xFF) & (chip8.opcode & 0x00FF);
+                chip8.register[(chip8.opcode & 0x0F00) >> 8] = (generateRandomInteger(0, 255) & (chip8.opcode & 0x00FF));
                 break;
             case 0xD000:
-                const REG_VX = chip8.register[chip8.opcode & 0x0F00 >> 8];
-                const REG_VY = chip8.register[chip8.opcode & 0x00F0 >> 4];
+                const REG_VX = chip8.register[(chip8.opcode & 0x0F00) >> 8];
+                const REG_VY = chip8.register[(chip8.opcode & 0x00F0) >> 4];
                 const N = chip8.opcode & 0x000F;
                 chip8.register[0xF] = 0;
-                for (let y = 0; y <= N; y++) {
+                for (let y = 0; y < N; y++) {
                     const pixelLine = chip8.memory[chip8.Iregister + y];
+                    console.log(pixelLine.toString(2))
                     for (let x = 0; x < 8; x++) {
                         // 0b10000000 is a bitmask to check if pixel at position [x] is going to be drawn or not.
                         // This bitmask is shifted by [x] to check for the pixelLine's [x] binary value.
-                        if (pixelLine & (0b10000000 >>> x) == 0b1) {
-                            if (chip8.screen[y + REG_VY][x + REG_VX] ^ 1 == 0) chip8.register[0xF] = 1;
+                        if ((pixelLine & (0x80 >> x)) != 0) {
+                            if (chip8.screen[y + REG_VY][x + REG_VX] == 1) chip8.register[0xF] = 1;
+                            console.log(x, y, REG_VX, REG_VY)
                             chip8.screen[y + REG_VY][x + REG_VX] ^= 1;
                         }
                     }
@@ -174,55 +185,56 @@ export const chip8 = {
                 // Redraws the screen.
                 chip8.drawFlag = true;
                 chip8.pc += 2;
+                break;
             case 0xE000:
-                switch(chip8.opcode & 0x00FF){
+                switch (chip8.opcode & 0x00FF) {
                     case 0x00A1:
-                        if (chip8.keys[chip8.register[chip8.opcode & 0x0F00 >> 8]] != 0){
-                            chip8.pc +=4;
+                        if (chip8.keys[chip8.register[(chip8.opcode & 0x0F00) >> 8]] != 0) {
+                            chip8.pc += 4;
                         }
-                        else chip8.pc +=2;
+                        else chip8.pc += 2;
                         break;
                     case 0x00A1:
-                        if (chip8.keys[chip8.register[chip8.opcode & 0x0F00 >> 8]] == 0){
-                            chip8.pc +=4;
+                        if (chip8.keys[chip8.register[(chip8.opcode & 0x0F00) >> 8]] == 0) {
+                            chip8.pc += 4;
                         }
-                        else chip8.pc +=2;
+                        else chip8.pc += 2;
                         break;
                 }
                 break;
             case 0xF000:
-                switch (chip8.opcode & 0x00FF){
+                switch (chip8.opcode & 0x00FF) {
                     case 0x0007:
-                        chip8.register[chip8.opcode & 0x0F00 >> 8] = chip8.delayTimer;
+                        chip8.register[(chip8.opcode & 0x0F00) >> 8] = chip8.delayTimer;
                         break;
                     case 0x0018:
-                        chip8.register[chip8.opcode & 0x0F00 >> 8] = chip8.soundTimer;
+                        chip8.register[(chip8.opcode & 0x0F00) >> 8] = chip8.soundTimer;
                         break;
                     case 0x001E:
-                        chip8.Iregister += chip8.register[chip8.opcode & 0x0F00 >> 8];
+                        chip8.Iregister += chip8.register[(chip8.opcode & 0x0F00) >> 8];
                         chip8.Iregister &= 0xFFF;
                         break;
                     case 0x0029:
-                        chip8.Iregister = (chip8.register[chip8.opcode & 0x0F00 >> 8] & 0xF) * 5;
+                        chip8.Iregister = (chip8.register[(chip8.opcode & 0x0F00) >> 8] & 0xF) * 5;
                         break;
                     case 0x0033:
-                        const REG_VX = chip8.register[chip8.opcode & 0x0F00 >> 8];
-                        chip8.memory[chip8.Iregister] = Math.floor(REG_VX/100);
-                        chip8.memory[chip8.Iregister + 1] = Math.floor(REG_VX%100/10);
-                        chip8.memory[chip8.Iregister + 2] = Math.floor(REG_VX%10);
+                        const REG_VX = chip8.register[(chip8.opcode & 0x0F00) >> 8];
+                        chip8.memory[chip8.Iregister] = Math.floor(REG_VX / 100);
+                        chip8.memory[chip8.Iregister + 1] = Math.floor(REG_VX % 100 / 10);
+                        chip8.memory[chip8.Iregister + 2] = Math.floor(REG_VX % 10);
                         break;
                     case 0x0055:
-                        for (let i = 0; i <= (chip8.opcode & 0x0F00 >> 8); i++) {
+                        for (let i = 0; i <= ((chip8.opcode & 0x0F00) >> 8); i++) {
                             chip8.memory[chip8.Iregister + i] = chip8.register[i];
                         }
                         break;
                     case 0x0065:
-                        for (let i = 0; i <= (chip8.opcode & 0x0F00 >> 8); i++) {
+                        for (let i = 0; i <= ((chip8.opcode & 0x0F00) >> 8); i++) {
                             chip8.register[i] = chip8.memory[chip8.Iregister + i];
                         }
                         break;
                 }
-                chip8.pc+=2;
+                chip8.pc += 2;
                 break;
             default:
                 console.log(`Invalid opcode: 0x%X`, chip8.opcode);
@@ -239,7 +251,24 @@ export const chip8 = {
     }
 }
 
-const chip8_fontset = []
+const chip8_fontset = [
+    0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+    0x20, 0x60, 0x20, 0x20, 0x70, // 1
+    0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+    0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+    0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+    0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+    0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+    0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+    0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+    0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+    0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+    0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+    0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+    0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+    0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+    0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+]
 
 function generateRandomInteger(low, high) {
     const lowCeil = Math.ceil(low);
