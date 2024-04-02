@@ -5,21 +5,20 @@ import { chip8 } from "./chip8.mjs";
  */
 const canvas = document.getElementById("renderer").getContext("2d");
 var romReader = new FileReader();
-const rom = await (await fetch('./programs/tetris.c8')).blob();
+const rom = await (await fetch('./programs/Chip8 Picture.ch8')).blob();
 chip8.initialize();
 romReader.onload = (e) =>{
     /**
      * @type {Uint8Array} arrayBuffer
      */
     const buffer = new Uint8Array(e.target.result);
-    console.log(buffer);
     chip8.loadProgram(buffer);
-    const loop = setInterval(()=>{
-        chip8.emulateCycle();
+    const loop = setInterval(async ()=>{
+        if(!chip8.threadBlocked) chip8.emulateCycle();
         if (chip8.drawFlag) {
             draw();
         }
-    }, 16.67)
+    }, 10)
 }
 romReader.readAsArrayBuffer(rom);
 function draw() {
